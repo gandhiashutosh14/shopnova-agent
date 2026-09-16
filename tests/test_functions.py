@@ -86,7 +86,7 @@ def test_issue_refund_within_policy_is_processed():
     assert body["refund_amount"] == pytest.approx(79.99)
 
 
-def test_issue_refund_above_threshold_requires_human_approval(monkeypatch):
+def test_issue_refund_above_threshold_cannot_be_self_approved_by_caller(monkeypatch):
     module, fn = load_function("issue_refund")
     # Lower the policy threshold so a sample order trips the guardrail.
     monkeypatch.setitem(module.REFUND_POLICY, "requires_approval_above", 50.0)
@@ -97,9 +97,15 @@ def test_issue_refund_above_threshold_requires_human_approval(monkeypatch):
     assert body["escalation_needed"] is True
     assert "refund_id" not in body
 
-    body, status = invoke(fn, {"order_id": "ORD-001", "approved": True})
+    # Even if an untrusted caller/model invents an approval field, the tool
+    # must not process the refund. Human approval belongs in a trusted control
+    # plane, not in model-generated tool arguments.
+    bypass, status = invoke(fn, {"order_id": "ORD-001", "approved": True})
     assert status == 200
-    assert body["success"] is True
+    assert bypass["requires_approval"] is True
+    assert bypass["escalation_needed"] is True
+    assert "refund_id" not in bypass
+    assert "success" not in bypass
 
 
 # ---------------------------------------------------------------------------
