@@ -1,0 +1,3 @@
+-r orchestrator/requirements.txt
+functions-framework==3.*
+pytest>=8.0
